@@ -1,0 +1,110 @@
+# Standard single-host NyxMail stack: web, worker, PostgreSQL and Redis.
+#
+#   cp .env.example .env
+#   npm run keys:secrets
+#   docker compose -f docker-compose.selfhost.yml up -d --build postgres redis
+#   docker compose -f docker-compose.selfhost.yml run --rm web npm run db:migrate
+#   docker compose -f docker-compose.selfhost.yml up -d
+#
+# Put a TLS reverse proxy in front of NYXMAIL_HTTP_PORT. Do not publish the
+# Postgres or Redis ports. See README.md → Self-hosting quick start.
+
+name: nyxmail
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nyxmail}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nyxmail}
+      POSTGRES_DB: ${POSTGRES_DB:-nyxmail}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-nyxmail} -d $${POSTGRES_DB:-nyxmail}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+    image: nyxmail:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nyxmail}:${POSTGRES_PASSWORD:-nyxmail}@postgres:5432/${POSTGRES_DB:-nyxmail}?schema=public
+      REDIS_URL: redis://redis:6379
+      UPLOAD_DIR: /app/uploads
+      DKIM_KEY_DIR: /app/config/dkim
+    ports:
+      - "${NYXMAIL_BIND_ADDRESS:-127.0.0.1}:${NYXMAIL_HTTP_PORT:-3000}:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./config/dkim:/app/config/dkim:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+
+  worker:
+    build:
+      context: .
+    image: nyxmail:latest
+    command: npm run worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nyxmail}:${POSTGRES_PASSWORD:-nyxmail}@postgres:5432/${POSTGRES_DB:-nyxmail}?schema=public
+      REDIS_URL: redis://redis:6379
+      UPLOAD_DIR: /app/uploads
+      DKIM_KEY_DIR: /app/config/dkim
+    volumes:
+      - ./uploads:/app/uploads
+      - ./config/dkim:/app/config/dkim:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    stop_grace_period: 30s
+
+volumes:
+  postgres-data:
+  redis-data:

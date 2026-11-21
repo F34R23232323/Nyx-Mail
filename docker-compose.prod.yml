@@ -1,0 +1,69 @@
+services:
+  # Local Rspamd worker. It sees plaintext only during SMTP delivery (the same
+  # trust boundary as the MTA); stored mail stays encrypted.
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: nyxmail-rspamd
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    volumes:
+      - ./config/rspamd/local.d:/etc/rspamd/local.d:ro
+      - nyxmail_rspamd:/var/lib/rspamd
+    healthcheck:
+      test: ["CMD-SHELL", "rspamc -h 127.0.0.1:11334 stat >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build: .
+    image: nyxmail:latest
+    container_name: nyxmail-web
+    command: npm run start
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      PORT: "5947"
+      NODE_ENV: production
+      DKIM_KEY_DIR: /app/config/dkim
+    volumes:
+      - ./uploads:/app/uploads
+      - ./config/dkim:/app/config/dkim:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5947/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+
+  worker:
+    image: nyxmail:latest
+    container_name: nyxmail-worker
+    command: npm run worker
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DKIM_KEY_DIR: /app/config/dkim
+    volumes:
+      - ./uploads:/app/uploads
+      - ./config/dkim:/app/config/dkim:ro
+    depends_on:
+      - web
+    stop_grace_period: 30s
+
+volumes:
+  nyxmail_rspamd:

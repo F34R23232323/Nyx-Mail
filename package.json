@@ -1,0 +1,66 @@
+{
+  "name": "nyxmail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NyxMail \u2014 a self-hosted, zero-access encrypted webmail platform",
+  "license": "MIT",
+  "keywords": [
+    "email",
+    "webmail",
+    "self-hosted",
+    "end-to-end-encryption",
+    "zero-access",
+    "nextjs",
+    "prisma",
+    "mail-server"
+  ],
+  "workspaces": [
+    "web",
+    "shared",
+    "crypto",
+    "db",
+    "server",
+    "workers"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace web",
+    "dev:worker": "npm run dev --workspace workers",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace web",
+    "worker": "npm run start --workspace workers",
+    "db:generate": "prisma generate --schema db/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema db/prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema db/prisma/schema.prisma",
+    "db:seed": "tsx db/prisma/seed.ts",
+    "db:studio": "prisma studio --schema db/prisma/schema.prisma",
+    "demo:totp": "node scripts/demo-totp.mjs",
+    "dkim:generate": "node scripts/generate-dkim.mjs",
+    "keys:secrets": "node scripts/generate-secrets.mjs",
+    "typecheck": "npm run typecheck --workspace crypto && npm run typecheck --workspace shared && npm run typecheck --workspace server && npm run typecheck --workspace workers && npm run typecheck --workspace web && tsc --noEmit -p mta/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run test:e2e --workspace web",
+    "test:mobile": "npm --prefix mobile run test:crypto",
+    "typecheck:mobile": "npm --prefix mobile run typecheck",
+    "docker:selfhost": "docker compose -f docker-compose.selfhost.yml up -d --build",
+    "mta": "tsx mta/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/smtp-server": "^3.5.13",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "overrides": {
+    "postcss": "^8.5.23"
+  },
+  "dependencies": {
+    "mailauth": "^8.1.0",
+    "smtp-server": "^3.21.6"
+  }
+}

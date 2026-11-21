@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "NyxMail",
+    "slug": "nyxmail",
+    "scheme": "nyxmail",
+    "version": "1.1.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.nyxmail.client"
+    },
+    "android": {
+      "package": "app.nyxmail.client",
+      "versionCode": 3,
+      "predictiveBackGestureEnabled": true,
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "backgroundColor": "#08090D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#08090D",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140
+        }
+      ],
+      "expo-web-browser"
+    ]
+  }
+}

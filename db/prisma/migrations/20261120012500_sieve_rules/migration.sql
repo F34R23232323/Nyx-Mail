@@ -1,0 +1,5 @@
+CREATE TYPE "RuleMode" AS ENUM ('VISUAL', 'SIEVE');
+
+ALTER TABLE "MailRule"
+  ADD COLUMN "mode" "RuleMode" NOT NULL DEFAULT 'VISUAL',
+  ADD COLUMN "sieveScript" TEXT;

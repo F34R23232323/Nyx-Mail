@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nyxmail-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nyxmail
+      POSTGRES_PASSWORD: nyxmail
+      POSTGRES_DB: nyxmail
+    ports:
+      - "5432:5432"
+    volumes:
+      - nyxmail_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nyxmail -d nyxmail"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Local spam scanner and Bayesian learner. Set RSPAMD_URL in .env to use it.
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: nyxmail-rspamd
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config/rspamd/local.d:/etc/rspamd/local.d:ro
+      - nyxmail_rspamd:/var/lib/rspamd
+    healthcheck:
+      test: ["CMD-SHELL", "rspamc -h 127.0.0.1:11334 stat >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Optional. NyxMail works without Redis (in-process rate limiting).
+  redis:
+    image: redis:7-alpine
+    container_name: nyxmail-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - nyxmail_redis:/data
+
+volumes:
+  nyxmail_pgdata:
+  nyxmail_redis:
+  nyxmail_rspamd:

@@ -1,0 +1,31 @@
+{
+  "name": "@nyxmail/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate --schema prisma/schema.prisma",
+    "migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts",
+    "studio": "prisma studio --schema prisma/schema.prisma",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nyxmail/crypto": "1.0.0",
+    "@nyxmail/shared": "1.0.0",
+    "@prisma/client": "^5.22.0",
+    "argon2": "^0.41.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

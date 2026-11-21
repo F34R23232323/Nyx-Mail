@@ -1,0 +1,415 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FolderType {
+  INBOX
+  SENT
+  DRAFTS
+  ARCHIVE
+  SPAM
+  TRASH
+  CUSTOM
+}
+
+enum ImportSource {
+  GMAIL
+  IMAP
+  PROTON
+  MBOX
+  EML
+}
+
+enum ImportStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum FilterKind {
+  BLOCK
+  ALLOW
+}
+
+enum RuleMatchType {
+  ALL
+  ANY
+}
+
+enum RuleMode {
+  VISUAL
+  SIEVE
+}
+
+enum ScheduledSendStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum TransportStatus {
+  SENT
+  FAILED
+}
+
+model User {
+  id                      String   @id @default(cuid())
+  email                   String   @unique
+  displayName             String
+  isAdmin                 Boolean  @default(false)
+  passwordHash            String
+  argonSalt               String
+  recoverySalt            String
+  encryptedPrivateKey     String   @db.Text
+  recoveryEncryptedPrivateKey String @db.Text
+  recoveryKeyHash         String
+  publicKey               String
+  signingPublicKey        String
+  totpSecretEncrypted     String?
+  totpEnabled             Boolean  @default(false)
+  backupCodes             Json     @default("[]")
+  webauthnCredentials     Json     @default("[]")
+  recoveryEmail           String?
+  signatureText           String?  @db.Text
+  signatureHtml           String?  @db.Text
+  storageUsedBytes        Int      @default(0)
+  storageLimitBytes       Int      @default(1610612736)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  sessions                Session[]
+  aliases                 Alias[]
+  folders                 Folder[]
+  labels                  Label[]
+  messages                Message[]
+  threads                 Thread[]
+  contacts                Contact[]
+  importJobs              ImportJob[]
+  gmailAccounts           GmailAccount[]
+  attachments             Attachment[]
+  filters                 MailFilter[]
+  mailRules               MailRule[]
+  senderStats             SenderStat[]
+  transportLogs           TransportLog[]
+  scheduledSends          ScheduledSend[]
+
+  @@index([createdAt])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  previousTokenHash String?
+  previousTokenAt   DateTime?
+  ip               String
+  userAgent        String
+  expiresAt        DateTime
+  lastSeenAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model Alias {
+  id        String   @id @default(cuid())
+  userId    String
+  address   String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Folder {
+  id        String     @id @default(cuid())
+  userId    String
+  name      String
+  type      FolderType
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([userId, type])
+  @@unique([userId, name])
+}
+
+model Label {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  color     String    @default("#8B5CF6")
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[] @relation("MessageLabels")
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Thread {
+  id             String    @id @default(cuid())
+  userId         String
+  threadKey      String
+  subjectPreview String    @db.Text
+  lastActivityAt DateTime  @default(now())
+  messageCount   Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       Message[]
+
+  @@unique([userId, threadKey])
+  @@index([userId, lastActivityAt])
+}
+
+model Message {
+  id               String    @id @default(cuid())
+  userId           String
+  folderId         String
+  threadId         String
+  messageIdHeader  String?
+  inReplyTo        String?
+  references       Json      @default("[]")
+  fromAddress      String
+  fromName         String?
+  toAddresses      Json      @default("[]")
+  ccAddresses      Json      @default("[]")
+  bccAddresses     Json      @default("[]")
+  encryptedSubject String    @db.Text
+  encryptedBody    String    @db.Text
+  wrappedKey       String    @db.Text
+  attachments      Json      @default("[]")
+  isRead           Boolean   @default(false)
+  isStarred        Boolean   @default(false)
+  isDraft          Boolean   @default(false)
+  sentAt           DateTime  @default(now())
+  receivedAt       DateTime  @default(now())
+  sizeBytes        Int       @default(0)
+  spf              String?
+  dkim             String?
+  dmarc            String?
+  /// Broad automatic category (PRIMARY, TRANSACTIONS, PROMOTIONS, ...).
+  category         String   @default("PRIMARY")
+  /// Specific built-in filters that matched (BILLING, MARKETING, ...).
+  categories       Json     @default("[]")
+  spamScore        Float?
+  spamAction       String?
+  spamEngine       String?
+  spamSymbols      Json     @default("[]")
+  snoozeUntil      DateTime?
+  trashedAt        DateTime?
+  purgeAt          DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder           Folder    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  thread           Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  labels           Label[]   @relation("MessageLabels")
+  attachmentRows   Attachment[]
+  scheduledSend    ScheduledSend?
+
+  @@unique([userId, folderId, messageIdHeader])
+  @@index([userId, folderId, sentAt])
+  @@index([userId, threadId])
+  @@index([userId, snoozeUntil])
+  @@index([userId, purgeAt])
+  @@index([userId, isRead])
+  @@index([userId, receivedAt])
+  @@index([userId, category])
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  email      String
+  dedupeKey  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dedupeKey])
+}
+
+model ImportJob {
+  id               String       @id @default(cuid())
+  userId           String
+  source           ImportSource
+  status           ImportStatus @default(PENDING)
+  progressMessages Int          @default(0)
+  totalMessages    Int          @default(0)
+  cursor           String?
+  errors           Json         @default("[]")
+  config           Json         @default("{}")
+  folderMapping    Json         @default("{}")
+  meta             Json         @default("{}")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model GmailAccount {
+  id           String    @id @default(cuid())
+  userId       String
+  googleEmail  String
+  credentials  String    @db.Text
+  lastSyncAt   DateTime?
+  enabled      Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, googleEmail])
+  @@index([enabled, lastSyncAt])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  userId       String
+  messageId    String?
+  blobId       String
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  encryptedKey String   @db.Text
+  storagePath  String
+  contentId    String?
+  inline       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, blobId])
+  @@index([messageId])
+}
+
+model MailRule {
+  id             String        @id @default(cuid())
+  userId         String
+  name           String
+  enabled        Boolean       @default(true)
+  mode           RuleMode      @default(VISUAL)
+  priority       Int           @default(0)
+  matchType      RuleMatchType @default(ALL)
+  conditions     Json          @default("[]")
+  expression     Json?
+  actions        Json          @default("[]")
+  sieveScript    String?       @db.Text
+  stopProcessing Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, enabled, priority])
+}
+
+model MailFilter {
+  id        String     @id @default(cuid())
+  userId    String
+  kind      FilterKind
+  pattern   String
+  createdAt DateTime   @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, pattern])
+  @@index([userId])
+}
+
+model SenderStat {
+  id          String   @id @default(cuid())
+  userId      String
+  address     String
+  spamReports Int      @default(0)
+  hamReports  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, address])
+}
+
+model TransportLog {
+  id           String          @id @default(cuid())
+  userId       String?
+  provider     String
+  toAddresses  Json            @default("[]")
+  subject      String?
+  messageId    String?
+  status       TransportStatus
+  error        String?         @db.Text
+  preview      String?         @db.Text
+  createdAt    DateTime        @default(now())
+
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model ScheduledSend {
+  id           String               @id @default(cuid())
+  userId       String
+  messageId    String?              @unique
+  relayPayload String               @db.Text
+  sendAt       DateTime
+  status       ScheduledSendStatus  @default(PENDING)
+  error        String?              @db.Text
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message      Message?             @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([status, sendAt])
+}
+
+// Domains added through Settings → Domains. Environment variables remain a
+// bootstrap source, but this table is the live source of truth for domains
+// added at runtime.
+model MailDomain {
+  id              String    @id @default(cuid())
+  domain          String    @unique
+  enabled         Boolean   @default(true)
+  allowSignup     Boolean   @default(false)
+  catchAllAddress String?
+  dkimSelector    String?
+  dkimPublicKey   String?   @db.Text
+  /// AES-256-GCM encrypted PKCS#8 private key (APP_ENCRYPTION_KEY).
+  dkimPrivateKey  String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled])
+}
